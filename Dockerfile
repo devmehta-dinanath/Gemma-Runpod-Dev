@@ -1,4 +1,4 @@
-FROM runpod/worker-v1-vllm:v2.27.0
+FROM runpod/worker-v1-vllm:v2.19.0
 
 RUN pip install --no-cache-dir \
     av \
