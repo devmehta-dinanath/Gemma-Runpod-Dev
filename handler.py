@@ -1,4 +1,7 @@
+#!/usr/bin/env python3
+import json
 import os
+import sys
 import time
 import subprocess
 import requests
@@ -16,6 +19,39 @@ PORT = 8000
 MAX_MODEL_LEN = os.getenv("MAX_MODEL_LEN", "8192")
 GPU_MEMORY_UTILIZATION = os.getenv("GPU_MEMORY_UTILIZATION", "0.85")
 MAX_NUM_SEQS = os.getenv("MAX_NUM_SEQS", "1")
+VIDEO_NUM_FRAMES = int(os.getenv("VIDEO_NUM_FRAMES", "16"))
+
+# Gemma 4 has no video tower. vLLM samples the clip into frames and
+# runs those frames through the vision encoder. Cap the profiled clip
+# so startup fits in MAX_MODEL_LEN. Override with VIDEO_NUM_FRAMES.
+LIMIT_MM_PER_PROMPT = os.getenv(
+    "LIMIT_MM_PER_PROMPT",
+    json.dumps(
+        {
+            "image": 4,
+            "audio": 1,
+            "video": {
+                "count": 1,
+                "num_frames": VIDEO_NUM_FRAMES,
+                "width": 448,
+                "height": 448,
+            },
+        },
+        separators=(",", ":"),
+    ),
+)
+MEDIA_IO_KWARGS = os.getenv(
+    "MEDIA_IO_KWARGS",
+    json.dumps(
+        {
+            "video": {
+                "num_frames": VIDEO_NUM_FRAMES,
+                "backend": "opencv",
+            }
+        },
+        separators=(",", ":"),
+    ),
+)
 
 
 vllm_process = None
@@ -28,7 +64,9 @@ def start_vllm():
         return
 
     command = [
-        "vllm",
+        sys.executable,
+        "-m",
+        "vllm.entrypoints.cli.main",
         "serve",
         MODEL_PATH,
         "--host",
@@ -42,7 +80,9 @@ def start_vllm():
         "--max-num-seqs",
         str(MAX_NUM_SEQS),
         "--limit-mm-per-prompt",
-        '{"image":4,"audio":1,"video":1}',
+        LIMIT_MM_PER_PROMPT,
+        "--media-io-kwargs",
+        MEDIA_IO_KWARGS,
     ]
 
     print("Starting vLLM:")
@@ -135,6 +175,7 @@ def handler(job):
             "stop",
             "stream",
             "seed",
+            "mm_processor_kwargs",
         ]
 
         for parameter in optional_parameters:
@@ -179,6 +220,8 @@ if __name__ == "__main__":
     print(f"Max model length: {MAX_MODEL_LEN}")
     print(f"GPU memory utilization: {GPU_MEMORY_UTILIZATION}")
     print(f"Max sequences: {MAX_NUM_SEQS}")
+    print(f"Video frames: {VIDEO_NUM_FRAMES}")
+    print(f"Multimodal limits: {LIMIT_MM_PER_PROMPT}")
     print("=" * 60)
 
     start_vllm()
