@@ -30,11 +30,11 @@ LIMIT_MM_PER_PROMPT = os.getenv(
         {
             "image": 4,
             "audio": 1,
-            "video": {
+                "video": {
                 "count": 1,
                 "num_frames": VIDEO_NUM_FRAMES,
-                "width": 448,
-                "height": 448,
+                "width": 224,
+                "height": 224,
             },
         },
         separators=(",", ":"),
@@ -57,11 +57,32 @@ MEDIA_IO_KWARGS = os.getenv(
 vllm_process = None
 
 
+def prepare_compile_cache():
+    """Keep torch.compile output on the network volume.
+
+    A new serverless worker has an empty container disk, so the ~80s
+    compile under /root/.cache otherwise runs on every cold start.
+    """
+    cache_root = os.getenv("VLLM_CACHE_ROOT", "/runpod-volume/vllm-cache")
+    inductor_cache = os.path.join(cache_root, "inductor")
+    try:
+        os.makedirs(inductor_cache, exist_ok=True)
+    except OSError as exc:
+        print(f"Compile cache not available ({exc}).")
+        return
+
+    os.environ["VLLM_CACHE_ROOT"] = cache_root
+    os.environ["TORCHINDUCTOR_CACHE_DIR"] = inductor_cache
+    print(f"vLLM compile cache: {cache_root}")
+
+
 def start_vllm():
     global vllm_process
 
     if vllm_process is not None:
         return
+
+    prepare_compile_cache()
 
     command = [
         sys.executable,
@@ -83,6 +104,8 @@ def start_vllm():
         LIMIT_MM_PER_PROMPT,
         "--media-io-kwargs",
         MEDIA_IO_KWARGS,
+        "--safetensors-load-strategy",
+        "prefetch",
     ]
 
     print("Starting vLLM:")

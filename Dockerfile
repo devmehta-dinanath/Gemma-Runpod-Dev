@@ -7,6 +7,8 @@ ENV HF_HUB_CACHE=/runpod-volume/huggingface-cache/hub
 ENV HUGGINGFACE_HUB_CACHE=/runpod-volume/huggingface-cache/hub
 ENV TOKENIZERS_PARALLELISM=false
 ENV PYTHONUNBUFFERED=1
+ENV VLLM_CACHE_ROOT=/runpod-volume/vllm-cache
+ENV TORCHINDUCTOR_CACHE_DIR=/runpod-volume/vllm-cache/inductor
 
 # This image ships python3 only. A start command of `python` exits 127.
 RUN ln -sf "$(command -v python3)" /usr/local/bin/python
